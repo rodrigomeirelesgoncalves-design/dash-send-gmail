@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Satellites from "./pages/Satellites";
 import Responses from "./pages/Responses";
 import Upload from "./pages/Upload";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
               <Route path="/satellites" element={<Satellites />} />
               <Route path="/responses" element={<Responses />} />
               <Route path="/upload" element={<Upload />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </MainLayout>

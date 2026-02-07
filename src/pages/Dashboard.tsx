@@ -1,4 +1,4 @@
-import { useSatellites } from "@/contexts/SatelliteContext";
+import { useSatellitesDB, useMetricsDB, useRefreshData } from "@/hooks/useSatellitesDB";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SatellitePerformanceTable } from "@/components/dashboard/SatellitePerformanceTable";
 import { MetricsChart } from "@/components/dashboard/MetricsChart";
@@ -16,10 +16,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const Dashboard = () => {
-  const { getTotalMetrics, isLoading, lastUpdated, refreshData, satellites } =
-    useSatellites();
+  const { satellites, isLoading: satellitesLoading } = useSatellitesDB();
+  const { getTotalMetrics, isLoading: metricsLoading } = useMetricsDB();
+  const refreshData = useRefreshData();
+  
   const totals = getTotalMetrics();
-  const activeSatellites = satellites.filter((s) => s.isActive).length;
+  const activeSatellites = satellites.filter((s) => s.is_active).length;
+  const isLoading = satellitesLoading || metricsLoading || refreshData.isPending;
 
   return (
     <div className="space-y-6">
@@ -37,20 +40,18 @@ const Dashboard = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {lastUpdated && (
-            <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                Atualizado às{" "}
-                {lastUpdated.toLocaleTimeString("pt-BR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
+              Atualizado às{" "}
+              {new Date().toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
           <Button
-            onClick={refreshData}
+            onClick={() => refreshData.mutate()}
             disabled={isLoading}
             className="gap-2"
           >
@@ -87,8 +88,8 @@ const Dashboard = () => {
           value={totals.opened}
           icon={MailOpen}
           variant="success"
-          trend={Math.round((totals.opened / totals.sent) * 100) || 0}
-          description={`${Math.round((totals.opened / totals.sent) * 100) || 0}% taxa de abertura`}
+          trend={totals.sent > 0 ? Math.round((totals.opened / totals.sent) * 100) : 0}
+          description={`${totals.sent > 0 ? Math.round((totals.opened / totals.sent) * 100) : 0}% taxa de abertura`}
         />
         <MetricCard
           title="Respostas"

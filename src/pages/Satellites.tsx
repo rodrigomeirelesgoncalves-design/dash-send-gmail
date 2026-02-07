@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSatellites } from "@/contexts/SatelliteContext";
+import { useSatellitesDB } from "@/hooks/useSatellitesDB";
 import {
   Table,
   TableBody,
@@ -20,7 +20,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Plus,
@@ -29,13 +28,14 @@ import {
   Copy,
   Check,
   Satellite as SatelliteIcon,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const Satellites = () => {
-  const { satellites, addSatellite, removeSatellite, toggleSatellite } =
-    useSatellites();
+  const { satellites, isLoading, addSatellite, removeSatellite, toggleSatellite } =
+    useSatellitesDB();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newSatellite, setNewSatellite] = useState({
     alias: "",
@@ -50,12 +50,12 @@ const Satellites = () => {
       return;
     }
 
-    addSatellite({
-      ...newSatellite,
-      isActive: true,
+    addSatellite.mutate({
+      alias: newSatellite.alias,
+      sheet_id: newSatellite.sheetId,
+      web_url: newSatellite.webUrl || undefined,
     });
 
-    toast.success("Satélite adicionado com sucesso!");
     setNewSatellite({ alias: "", sheetId: "", webUrl: "" });
     setIsDialogOpen(false);
   };
@@ -69,10 +69,20 @@ const Satellites = () => {
 
   const handleRemove = (id: string, alias: string) => {
     if (confirm(`Tem certeza que deseja remover "${alias}"?`)) {
-      removeSatellite(id);
-      toast.success("Satélite removido");
+      removeSatellite.mutate(id);
     }
   };
+
+  const activeSatellites = satellites.filter((s) => s.is_active);
+  const inactiveSatellites = satellites.filter((s) => !s.is_active);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -99,7 +109,8 @@ const Satellites = () => {
               <DialogTitle>Adicionar Novo Satélite</DialogTitle>
               <DialogDescription>
                 Adicione uma nova conta de envio conectando a planilha Google
-                Sheets.
+                Sheets. Lembre-se de compartilhar a planilha com o email da conta
+                de serviço.
               </DialogDescription>
             </DialogHeader>
 
@@ -149,7 +160,13 @@ const Satellites = () => {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAdd}>Adicionar</Button>
+              <Button onClick={handleAdd} disabled={addSatellite.isPending}>
+                {addSatellite.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Adicionar"
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -177,7 +194,7 @@ const Satellites = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">
-                {satellites.filter((s) => s.isActive).length}
+                {activeSatellites.length}
               </p>
               <p className="text-sm text-muted-foreground">Ativos</p>
             </div>
@@ -190,7 +207,7 @@ const Satellites = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">
-                {satellites.filter((s) => !s.isActive).length}
+                {inactiveSatellites.length}
               </p>
               <p className="text-sm text-muted-foreground">Inativos</p>
             </div>
@@ -211,72 +228,85 @@ const Satellites = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {satellites.map((satellite) => (
-              <TableRow key={satellite.id} className="group">
-                <TableCell>
-                  <Switch
-                    checked={satellite.isActive}
-                    onCheckedChange={() => toggleSatellite(satellite.id)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        "h-2 w-2 rounded-full",
-                        satellite.isActive ? "bg-success" : "bg-muted-foreground"
-                      )}
-                    />
-                    <span className="font-medium">{satellite.alias}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
-                      {satellite.sheetId.slice(0, 20)}...
-                    </code>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-                      onClick={() => handleCopy(satellite.sheetId, satellite.id)}
-                    >
-                      {copiedId === satellite.id ? (
-                        <Check className="h-3.5 w-3.5 text-success" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {satellite.createdAt.toLocaleDateString("pt-BR")}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-2">
-                    {satellite.webUrl && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                        <a
-                          href={satellite.webUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => handleRemove(satellite.id, satellite.alias)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {satellites.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  Nenhum satélite cadastrado. Clique em "Adicionar Satélite" para começar.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              satellites.map((satellite) => (
+                <TableRow key={satellite.id} className="group">
+                  <TableCell>
+                    <Switch
+                      checked={satellite.is_active}
+                      onCheckedChange={() =>
+                        toggleSatellite.mutate({
+                          id: satellite.id,
+                          isActive: satellite.is_active,
+                        })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          satellite.is_active ? "bg-success" : "bg-muted-foreground"
+                        )}
+                      />
+                      <span className="font-medium">{satellite.alias}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                        {satellite.sheet_id.slice(0, 20)}...
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => handleCopy(satellite.sheet_id, satellite.id)}
+                      >
+                        {copiedId === satellite.id ? (
+                          <Check className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(satellite.created_at).toLocaleDateString("pt-BR")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-2">
+                      {satellite.web_url && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                          <a
+                            href={satellite.web_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => handleRemove(satellite.id, satellite.alias)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

@@ -1,4 +1,4 @@
-import { useSatellites } from "@/contexts/SatelliteContext";
+import { useMetricsDB } from "@/hooks/useSatellitesDB";
 import {
   BarChart,
   Bar,
@@ -7,14 +7,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
+import { Loader2 } from "lucide-react";
 
 export const MetricsChart = () => {
-  const { metrics } = useSatellites();
+  const { metrics, isLoading } = useMetricsDB();
 
   const chartData = metrics.slice(0, 8).map((m) => ({
-    name: m.satelliteAlias.split(" - ")[1] || m.satelliteAlias,
+    name: m.satellites?.alias?.split(" - ")[1] || m.satellites?.alias || "Satélite",
     enviados: m.sent,
     abertos: m.opened,
     respostas: m.replied,
@@ -25,6 +25,14 @@ export const MetricsChart = () => {
     abertos: "hsl(185, 80%, 50%)",
     respostas: "hsl(142, 76%, 45%)",
   };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6 h-[400px] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
@@ -62,56 +70,62 @@ export const MetricsChart = () => {
       </div>
 
       <div className="h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="hsl(var(--border))"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="name"
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-            />
-            <YAxis
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-                color: "hsl(var(--popover-foreground))",
-              }}
-              cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
-            />
-            <Bar
-              dataKey="enviados"
-              fill={colors.enviados}
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="abertos"
-              fill={colors.abertos}
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="respostas"
-              fill={colors.respostas}
-              radius={[4, 4, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+        {chartData.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+            Adicione satélites para visualizar o gráfico
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="hsl(var(--border))"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="name"
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  color: "hsl(var(--popover-foreground))",
+                }}
+                cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
+              />
+              <Bar
+                dataKey="enviados"
+                fill={colors.enviados}
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                dataKey="abertos"
+                fill={colors.abertos}
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                dataKey="respostas"
+                fill={colors.respostas}
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
