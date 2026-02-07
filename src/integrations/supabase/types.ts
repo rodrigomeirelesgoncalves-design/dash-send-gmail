@@ -14,7 +14,115 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      email_responses: {
+        Row: {
+          id: string
+          received_at: string
+          recipient_email: string
+          response_content: string | null
+          satellite_id: string
+          sender_email: string
+        }
+        Insert: {
+          id?: string
+          received_at?: string
+          recipient_email: string
+          response_content?: string | null
+          satellite_id: string
+          sender_email: string
+        }
+        Update: {
+          id?: string
+          received_at?: string
+          recipient_email?: string
+          response_content?: string | null
+          satellite_id?: string
+          sender_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_responses_satellite_id_fkey"
+            columns: ["satellite_id"]
+            isOneToOne: false
+            referencedRelation: "satellites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellite_metrics: {
+        Row: {
+          bounced: number
+          failed: number
+          id: string
+          opened: number
+          opt_out: number
+          recorded_at: string
+          replied: number
+          satellite_id: string
+          sent: number
+        }
+        Insert: {
+          bounced?: number
+          failed?: number
+          id?: string
+          opened?: number
+          opt_out?: number
+          recorded_at?: string
+          replied?: number
+          satellite_id: string
+          sent?: number
+        }
+        Update: {
+          bounced?: number
+          failed?: number
+          id?: string
+          opened?: number
+          opt_out?: number
+          recorded_at?: string
+          replied?: number
+          satellite_id?: string
+          sent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_metrics_satellite_id_fkey"
+            columns: ["satellite_id"]
+            isOneToOne: false
+            referencedRelation: "satellites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellites: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          is_active: boolean
+          sheet_id: string
+          updated_at: string
+          web_url: string | null
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          sheet_id: string
+          updated_at?: string
+          web_url?: string | null
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          sheet_id?: string
+          updated_at?: string
+          web_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
