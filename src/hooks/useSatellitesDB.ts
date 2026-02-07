@@ -31,6 +31,13 @@ export interface EmailResponseDB {
   recipient_email: string;
   response_content: string | null;
   received_at: string;
+  lead_name: string | null;
+  lead_company: string | null;
+  lead_website: string | null;
+  lead_city: string | null;
+  lead_tag: string | null;
+  gpt_response: string | null;
+  gpt_responded_at: string | null;
 }
 
 export function useSatellitesDB() {
