@@ -14,9 +14,76 @@ export type Database = {
   }
   public: {
     Tables: {
+      dossie_requests: {
+        Row: {
+          completed_at: string | null
+          id: string
+          lead_city: string | null
+          lead_company: string | null
+          lead_email: string
+          lead_name: string | null
+          lead_website: string | null
+          notes: string | null
+          requested_at: string
+          response_id: string | null
+          satellite_id: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          id?: string
+          lead_city?: string | null
+          lead_company?: string | null
+          lead_email: string
+          lead_name?: string | null
+          lead_website?: string | null
+          notes?: string | null
+          requested_at?: string
+          response_id?: string | null
+          satellite_id?: string | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string
+          lead_city?: string | null
+          lead_company?: string | null
+          lead_email?: string
+          lead_name?: string | null
+          lead_website?: string | null
+          notes?: string | null
+          requested_at?: string
+          response_id?: string | null
+          satellite_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dossie_requests_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "email_responses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dossie_requests_satellite_id_fkey"
+            columns: ["satellite_id"]
+            isOneToOne: false
+            referencedRelation: "satellites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_responses: {
         Row: {
+          gpt_responded_at: string | null
+          gpt_response: string | null
           id: string
+          lead_city: string | null
+          lead_company: string | null
+          lead_name: string | null
+          lead_tag: string | null
+          lead_website: string | null
           received_at: string
           recipient_email: string
           response_content: string | null
@@ -24,7 +91,14 @@ export type Database = {
           sender_email: string
         }
         Insert: {
+          gpt_responded_at?: string | null
+          gpt_response?: string | null
           id?: string
+          lead_city?: string | null
+          lead_company?: string | null
+          lead_name?: string | null
+          lead_tag?: string | null
+          lead_website?: string | null
           received_at?: string
           recipient_email: string
           response_content?: string | null
@@ -32,7 +106,14 @@ export type Database = {
           sender_email: string
         }
         Update: {
+          gpt_responded_at?: string | null
+          gpt_response?: string | null
           id?: string
+          lead_city?: string | null
+          lead_company?: string | null
+          lead_name?: string | null
+          lead_tag?: string | null
+          lead_website?: string | null
           received_at?: string
           recipient_email?: string
           response_content?: string | null
@@ -122,6 +203,47 @@ export type Database = {
           web_url?: string | null
         }
         Relationships: []
+      }
+      scheduled_sends: {
+        Row: {
+          created_at: string
+          executed_at: string | null
+          id: string
+          max_emails: number | null
+          result: Json | null
+          satellite_id: string | null
+          scheduled_for: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          max_emails?: number | null
+          result?: Json | null
+          satellite_id?: string | null
+          scheduled_for: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          executed_at?: string | null
+          id?: string
+          max_emails?: number | null
+          result?: Json | null
+          satellite_id?: string | null
+          scheduled_for?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_sends_satellite_id_fkey"
+            columns: ["satellite_id"]
+            isOneToOne: false
+            referencedRelation: "satellites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
