@@ -1,22 +1,30 @@
-import { useSatellites } from "@/contexts/SatelliteContext";
+import { useResponsesDB } from "@/hooks/useSatellitesDB";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageSquareReply, Clock } from "lucide-react";
+import { Search, MessageSquareReply, Clock, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const Responses = () => {
-  const { responses } = useSatellites();
+  const { responses, isLoading } = useResponsesDB();
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredResponses = responses.filter(
     (r) =>
-      r.senderEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.recipientEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.responseContent.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.satelliteAlias.toLowerCase().includes(searchTerm.toLowerCase())
+      r.sender_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.recipient_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.response_content?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      r.satellites.alias.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -85,20 +93,20 @@ const Responses = () => {
               >
                 <div>
                   <p className="font-medium text-foreground truncate">
-                    {response.senderEmail}
+                    {response.sender_email}
                   </p>
                   <Badge variant="secondary" className="mt-1 text-xs">
-                    {response.satelliteAlias}
+                    {response.satellites.alias}
                   </Badge>
                 </div>
 
                 <div>
                   <p className="font-medium text-primary truncate">
-                    {response.recipientEmail}
+                    {response.recipient_email}
                   </p>
                   <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    {formatDistanceToNow(response.receivedAt, {
+                    {formatDistanceToNow(new Date(response.received_at), {
                       addSuffix: true,
                       locale: ptBR,
                     })}
@@ -107,7 +115,7 @@ const Responses = () => {
 
                 <div className="flex items-start">
                   <p className="text-sm text-foreground leading-relaxed">
-                    {response.responseContent}
+                    {response.response_content || "Sem conteúdo"}
                   </p>
                 </div>
               </div>

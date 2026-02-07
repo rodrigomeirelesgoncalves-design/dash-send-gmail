@@ -8,7 +8,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSatellites } from "@/contexts/SatelliteContext";
+import { useSatellitesDB, useRefreshData } from "@/hooks/useSatellitesDB";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -16,12 +16,15 @@ const navItems = [
   { icon: Satellite, label: "Satélites", path: "/satellites" },
   { icon: MessageSquareReply, label: "Respostas", path: "/responses" },
   { icon: Upload, label: "Upload", path: "/upload" },
+  { icon: Settings, label: "Configurações", path: "/settings" },
 ];
 
 export const Sidebar = () => {
   const location = useLocation();
-  const { isLoading, lastUpdated, refreshData, satellites } = useSatellites();
-  const activeSatellites = satellites.filter((s) => s.isActive).length;
+  const { satellites, isLoading: satellitesLoading } = useSatellitesDB();
+  const refreshData = useRefreshData();
+  const activeSatellites = satellites.filter((s) => s.is_active).length;
+  const isLoading = satellitesLoading || refreshData.isPending;
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-sidebar">
@@ -77,7 +80,7 @@ export const Sidebar = () => {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={refreshData}
+              onClick={() => refreshData.mutate()}
               disabled={isLoading}
             >
               <RefreshCw
@@ -85,15 +88,13 @@ export const Sidebar = () => {
               />
             </Button>
           </div>
-          {lastUpdated && (
-            <p className="text-xs text-muted-foreground">
-              Última atualização:{" "}
-              {lastUpdated.toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Última atualização:{" "}
+            {new Date().toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
         </div>
       </div>
     </aside>
