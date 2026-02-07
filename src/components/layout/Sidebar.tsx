@@ -6,15 +6,20 @@ import {
   Upload,
   Settings,
   RefreshCw,
+  FileText,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSatellitesDB, useRefreshData } from "@/hooks/useSatellitesDB";
+import { useDossiesDB } from "@/hooks/useDossiesDB";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Satellite, label: "Satélites", path: "/satellites" },
   { icon: MessageSquareReply, label: "Respostas", path: "/responses" },
+  { icon: FileText, label: "Dossiês", path: "/dossies" },
+  { icon: Send, label: "Envios", path: "/envios" },
   { icon: Upload, label: "Upload", path: "/upload" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
@@ -22,8 +27,10 @@ const navItems = [
 export const Sidebar = () => {
   const location = useLocation();
   const { satellites, isLoading: satellitesLoading } = useSatellitesDB();
+  const { dossies } = useDossiesDB();
   const refreshData = useRefreshData();
   const activeSatellites = satellites.filter((s) => s.is_active).length;
+  const pendingDossies = dossies.filter((d) => d.status === "PENDENTE").length;
   const isLoading = satellitesLoading || refreshData.isPending;
 
   return (
@@ -62,6 +69,11 @@ export const Sidebar = () => {
                 {item.label === "Satélites" && (
                   <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/20 px-1.5 text-xs text-primary">
                     {activeSatellites}
+                  </span>
+                )}
+                {item.label === "Dossiês" && pendingDossies > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive/20 px-1.5 text-xs text-destructive">
+                    {pendingDossies}
                   </span>
                 )}
               </NavLink>

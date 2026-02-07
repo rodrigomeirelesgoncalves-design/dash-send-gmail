@@ -28,20 +28,22 @@ interface SheetMetrics {
   optOut: number;
 }
 
-interface EmailResponse {
-  senderEmail: string;
-  recipientEmail: string;
-  responseContent: string;
-  receivedAt: string;
+interface LeadData {
+  email: string;
+  empresa: string;
+  nome?: string;
+  site?: string;
+  cidade?: string;
+  status?: string;
+  replied?: boolean;
+  leadTag?: string;
+  leadResponseText?: string;
+  gptResponseText?: string;
 }
 
 // Generate JWT for Google API authentication
 async function generateJWT(credentials: ServiceAccountCredentials): Promise<string> {
-  const header = {
-    alg: "RS256",
-    typ: "JWT",
-  };
-
+  const header = { alg: "RS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: credentials.client_email,
@@ -55,14 +57,10 @@ async function generateJWT(credentials: ServiceAccountCredentials): Promise<stri
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   const signatureInput = `${encodedHeader}.${encodedPayload}`;
 
-  // Import the private key
   const privateKey = credentials.private_key.replace(/\\n/g, "\n");
   const pemHeader = "-----BEGIN PRIVATE KEY-----";
   const pemFooter = "-----END PRIVATE KEY-----";
-  const pemContents = privateKey
-    .replace(pemHeader, "")
-    .replace(pemFooter, "")
-    .replace(/\s/g, "");
+  const pemContents = privateKey.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
   const binaryDer = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
 
   const cryptoKey = await crypto.subtle.importKey(
@@ -87,15 +85,11 @@ async function generateJWT(credentials: ServiceAccountCredentials): Promise<stri
   return `${signatureInput}.${encodedSignature}`;
 }
 
-// Get access token from Google
 async function getAccessToken(credentials: ServiceAccountCredentials): Promise<string> {
   const jwt = await generateJWT(credentials);
-
   const response = await fetch(credentials.token_uri, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
   });
 
@@ -108,19 +102,14 @@ async function getAccessToken(credentials: ServiceAccountCredentials): Promise<s
   return data.access_token;
 }
 
-// Fetch data from Google Sheets
 async function fetchSheetData(sheetId: string, accessToken: string, range: string): Promise<string[][]> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`;
-  
   const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Failed to fetch sheet ${sheetId}: ${errorText}`);
+    console.error(`Failed to fetch sheet ${sheetId} range ${range}`);
     return [];
   }
 
@@ -128,43 +117,16 @@ async function fetchSheetData(sheetId: string, accessToken: string, range: strin
   return data.values || [];
 }
 
-// Parse metrics from sheet data
 function parseMetrics(data: string[][]): SheetMetrics {
-  // Default metrics
-  const metrics: SheetMetrics = {
-    sent: 0,
-    opened: 0,
-    replied: 0,
-    bounced: 0,
-    failed: 0,
-    optOut: 0,
-  };
-
+  const metrics: SheetMetrics = { sent: 0, opened: 0, replied: 0, bounced: 0, failed: 0, optOut: 0 };
   if (data.length === 0) return metrics;
 
-  // Try to find headers and parse data
-  const headers = data[0]?.map((h) => h?.toLowerCase()?.trim() || "") || [];
-  
-  // Common column name variations
-  const columnMappings: Record<keyof SheetMetrics, string[]> = {
-    sent: ["sent", "enviados", "envio", "enviado", "email sent"],
-    opened: ["opened", "abertos", "abertura", "aberto", "open", "opens"],
-    replied: ["replied", "respondidos", "resposta", "respostas", "reply", "replies"],
-    bounced: ["bounced", "bounce", "bounces", "devolvidos", "devolvido"],
-    failed: ["failed", "erro", "erros", "error", "errors", "falha", "falhas"],
-    optOut: ["optout", "opt-out", "opt out", "descadastro", "unsubscribe", "unsubscribed"],
-  };
-
-  // Count rows with specific status values
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (!row) continue;
-
-    // Check each cell for status indicators
     for (const cell of row) {
       if (!cell) continue;
       const cellLower = cell.toLowerCase().trim();
-      
       if (cellLower === "sent" || cellLower === "enviado") metrics.sent++;
       else if (cellLower === "opened" || cellLower === "aberto") metrics.opened++;
       else if (cellLower === "replied" || cellLower === "respondido") metrics.replied++;
@@ -174,7 +136,6 @@ function parseMetrics(data: string[][]): SheetMetrics {
     }
   }
 
-  // If no status found, count total rows as sent
   if (metrics.sent === 0 && data.length > 1) {
     metrics.sent = data.length - 1;
   }
@@ -182,45 +143,168 @@ function parseMetrics(data: string[][]): SheetMetrics {
   return metrics;
 }
 
-// Parse email responses from sheet
-function parseResponses(data: string[][], satelliteAlias: string): EmailResponse[] {
-  const responses: EmailResponse[] = [];
-  
-  if (data.length <= 1) return responses;
+function parseLeads(data: string[][]): LeadData[] {
+  const leads: LeadData[] = [];
+  if (data.length <= 1) return leads;
 
   const headers = data[0]?.map((h) => h?.toLowerCase()?.trim() || "") || [];
   
-  // Find relevant columns
-  const senderIdx = headers.findIndex(h => 
-    h.includes("sender") || h.includes("remetente") || h.includes("from") || h.includes("de")
-  );
-  const recipientIdx = headers.findIndex(h => 
-    h.includes("recipient") || h.includes("destinatario") || h.includes("to") || h.includes("para") || h.includes("email")
-  );
-  const contentIdx = headers.findIndex(h => 
-    h.includes("response") || h.includes("resposta") || h.includes("content") || h.includes("conteudo") || h.includes("body")
-  );
-  const dateIdx = headers.findIndex(h => 
-    h.includes("date") || h.includes("data") || h.includes("received") || h.includes("recebido")
-  );
+  const findCol = (names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
+  
+  const emailIdx = findCol(["email"]);
+  const empresaIdx = findCol(["empresa", "company"]);
+  const nomeIdx = findCol(["nome", "name"]);
+  const siteIdx = findCol(["site", "website", "url"]);
+  const cidadeIdx = findCol(["cidade", "city"]);
+  const statusIdx = findCol(["status"]);
+  const repliedIdx = findCol(["replied"]);
+  const leadTagIdx = findCol(["lead_tag"]);
+  const leadResponseIdx = findCol(["lead_response_text"]);
+  const gptResponseIdx = findCol(["gpt_response_text"]);
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (!row) continue;
+    
+    const email = row[emailIdx] || row[0] || "";
+    if (!email || !email.includes("@")) continue;
 
-    const response: EmailResponse = {
-      senderEmail: row[senderIdx] || row[0] || "",
-      recipientEmail: row[recipientIdx] || row[1] || "",
-      responseContent: row[contentIdx] || row[2] || "",
-      receivedAt: row[dateIdx] || new Date().toISOString(),
-    };
-
-    if (response.senderEmail && response.recipientEmail) {
-      responses.push(response);
-    }
+    leads.push({
+      email: email.trim(),
+      empresa: (row[empresaIdx] || row[1] || "").trim(),
+      nome: nomeIdx >= 0 ? row[nomeIdx]?.trim() : undefined,
+      site: siteIdx >= 0 ? row[siteIdx]?.trim() : undefined,
+      cidade: cidadeIdx >= 0 ? row[cidadeIdx]?.trim() : undefined,
+      status: statusIdx >= 0 ? row[statusIdx]?.trim() : undefined,
+      replied: repliedIdx >= 0 ? row[repliedIdx]?.toUpperCase() === "YES" : false,
+      leadTag: leadTagIdx >= 0 ? row[leadTagIdx]?.trim() : undefined,
+      leadResponseText: leadResponseIdx >= 0 ? row[leadResponseIdx]?.trim() : undefined,
+      gptResponseText: gptResponseIdx >= 0 ? row[gptResponseIdx]?.trim() : undefined,
+    });
   }
 
-  return responses;
+  return leads;
+}
+
+async function classifyWithAI(responseText: string, empresa: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) return "INDEFINIDO";
+
+  const prompt = `Você é um especialista em análise de respostas de prospecção B2B.
+
+RESPOSTA DO LEAD:
+"${responseText.slice(0, 1000)}"
+
+EMPRESA: ${empresa}
+
+TAREFA:
+Classifique esta resposta em UMA das seguintes categorias:
+1. INTERESSE - Lead demonstra interesse claro, quer mais informações, agenda reunião, pede proposta
+2. DESINTERESSE - Lead recusa claramente, não tem interesse, não é o momento
+3. CURIOSO - Lead faz perguntas, quer entender melhor, mas não demonstrou interesse claro ainda
+4. DÚVIDA - Lead tem objeções, preocupações ou perguntas técnicas/comerciais
+5. OPT_OUT - Lead pede para remover da lista, descadastrar, parar de enviar emails
+6. REDIRECIONAMENTO - Lead indica outra pessoa/departamento responsável
+7. FORA_DO_ESCRITÓRIO - Mensagem automática de férias/ausência
+
+Responda APENAS com a tag correspondente (ex: INTERESSE, DESINTERESSE, etc).`;
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 50,
+      }),
+    });
+
+    if (!response.ok) return "INDEFINIDO";
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim()?.toUpperCase() || "INDEFINIDO";
+  } catch (e) {
+    console.error("AI classification error:", e);
+    return "INDEFINIDO";
+  }
+}
+
+async function generateAIResponse(leadMessage: string, empresa: string): Promise<string | null> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) return null;
+
+  const prompt = `Você é Rodrigo Meireles, especialista em Google Meu Negócio.
+
+MENSAGEM DO LEAD (${empresa}):
+"${leadMessage.slice(0, 1000)}"
+
+CONTEXTO:
+- Você enviou um email oferecendo ajuda com o perfil do Google Meu Negócio
+- Sua abordagem é consultiva, não agressiva
+- Foque em gerar valor e agendar uma conversa rápida
+
+OBJETIVO:
+Responda de forma natural, profissional e personalizada.
+
+REGRAS:
+1. Se o lead perguntar mais detalhes, explique brevemente o serviço
+2. Se o lead indicar outra pessoa, agradeça e pergunte como contactar
+3. Se o lead demonstrar interesse, tente agendar uma call de 15min
+4. Se o lead pedir para sair da lista, peça desculpas e confirme a remoção
+5. Seja conciso (máximo 5 linhas)
+6. Use tom amigável mas profissional
+7. NÃO use assinatura (será adicionada automaticamente)
+
+Responda APENAS com o texto do email:`;
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+      }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error("AI response generation error:", e);
+    return null;
+  }
+}
+
+async function sendTelegramAlert(message: string, chatId: string) {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!token || !chatId) {
+    console.log("Telegram not configured");
+    return;
+  }
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "Markdown",
+      }),
+    });
+  } catch (e) {
+    console.error("Telegram error:", e);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -241,7 +325,6 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get all active satellites
     const { data: satellites, error: satellitesError } = await supabase
       .from("satellites")
       .select("*")
@@ -252,15 +335,18 @@ Deno.serve(async (req) => {
     }
 
     const results = [];
+    const telegramLeadsChatId = Deno.env.get("TELEGRAM_CHAT_ID_LEADS");
+    const telegramGptChatId = Deno.env.get("TELEGRAM_CHAT_ID_GPT");
 
     for (const satellite of satellites || []) {
       try {
-        // Fetch metrics from "Métricas" or main sheet
-        const metricsData = await fetchSheetData(satellite.sheet_id, accessToken, "A:Z");
-        const metrics = parseMetrics(metricsData);
+        // Fetch LEADS sheet
+        const leadsData = await fetchSheetData(satellite.sheet_id, accessToken, "LEADS!A:Z");
+        const metrics = parseMetrics(leadsData);
+        const leads = parseLeads(leadsData);
 
-        // Insert metrics record
-        const { error: metricsError } = await supabase.from("satellite_metrics").insert({
+        // Insert metrics
+        await supabase.from("satellite_metrics").insert({
           satellite_id: satellite.id,
           sent: metrics.sent,
           opened: metrics.opened,
@@ -270,40 +356,81 @@ Deno.serve(async (req) => {
           opt_out: metrics.optOut,
         });
 
-        if (metricsError) {
-          console.error(`Failed to insert metrics for ${satellite.alias}: ${metricsError.message}`);
-        }
+        // Process leads with replies
+        for (const lead of leads) {
+          if (!lead.replied || !lead.leadResponseText) continue;
 
-        // Try to fetch responses from "Respostas" sheet
-        try {
-          const responsesData = await fetchSheetData(satellite.sheet_id, accessToken, "Respostas!A:Z");
-          const responses = parseResponses(responsesData, satellite.alias);
+          // Check if response already exists
+          const { data: existingResponse } = await supabase
+            .from("email_responses")
+            .select("id")
+            .eq("satellite_id", satellite.id)
+            .eq("recipient_email", lead.email)
+            .limit(1);
 
-          for (const response of responses) {
-            await supabase.from("email_responses").insert({
+          if (existingResponse && existingResponse.length > 0) continue;
+
+          // Classify with AI if no tag
+          let tag = lead.leadTag;
+          if (!tag || tag === "") {
+            tag = await classifyWithAI(lead.leadResponseText, lead.empresa);
+          }
+
+          // Generate GPT response if none exists
+          let gptResponse = lead.gptResponseText;
+          if (!gptResponse && lead.leadResponseText) {
+            gptResponse = await generateAIResponse(lead.leadResponseText, lead.empresa) || undefined;
+          }
+
+          // Insert response
+          const { data: insertedResponse } = await supabase.from("email_responses").insert({
+            satellite_id: satellite.id,
+            sender_email: satellite.alias,
+            recipient_email: lead.email,
+            response_content: lead.leadResponseText,
+            lead_name: lead.nome,
+            lead_company: lead.empresa,
+            lead_website: lead.site,
+            lead_city: lead.cidade,
+            lead_tag: tag,
+            gpt_response: gptResponse,
+            gpt_responded_at: gptResponse ? new Date().toISOString() : null,
+          }).select().single();
+
+          // Send Telegram alerts
+          if (telegramLeadsChatId) {
+            await sendTelegramAlert(
+              `🔔 *NOVA RESPOSTA*\n🏢 *Empresa:* ${lead.empresa}\n📧 *Email:* ${lead.email}\n🏷 *Tag:* ${tag}\n📝 *Trecho:* _${lead.leadResponseText?.slice(0, 200)}..._`,
+              telegramLeadsChatId
+            );
+          }
+
+          if (gptResponse && telegramGptChatId) {
+            await sendTelegramAlert(
+              `🤖 *GPT RESPONDEU*\n🏢 *Empresa:* ${lead.empresa}\n📧 *Email:* ${lead.email}\n🏷 *Tag:* ${tag}\n💬 *Resposta:* _${gptResponse.slice(0, 250)}..._`,
+              telegramGptChatId
+            );
+          }
+
+          // Create dossiê request if INTERESSE
+          if (tag === "INTERESSE" && insertedResponse) {
+            await supabase.from("dossie_requests").insert({
               satellite_id: satellite.id,
-              sender_email: response.senderEmail,
-              recipient_email: response.recipientEmail,
-              response_content: response.responseContent,
-              received_at: new Date(response.receivedAt).toISOString(),
+              lead_email: lead.email,
+              lead_name: lead.nome,
+              lead_company: lead.empresa,
+              lead_website: lead.site,
+              lead_city: lead.cidade,
+              response_id: insertedResponse.id,
+              status: "PENDENTE",
             });
           }
-        } catch (e) {
-          console.log(`No responses sheet for ${satellite.alias}`);
         }
 
-        results.push({
-          satellite: satellite.alias,
-          metrics,
-          success: true,
-        });
+        results.push({ satellite: satellite.alias, metrics, leadsProcessed: leads.filter(l => l.replied).length, success: true });
       } catch (e) {
-        console.error(`Error processing ${satellite.alias}: ${e.message}`);
-        results.push({
-          satellite: satellite.alias,
-          error: e.message,
-          success: false,
-        });
+        console.error(`Error processing ${satellite.alias}:`, e);
+        results.push({ satellite: satellite.alias, error: (e as Error).message, success: false });
       }
     }
 
@@ -311,8 +438,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Error:", (error as Error).message);
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
