@@ -119,25 +119,35 @@ async function fetchSheetData(sheetId: string, accessToken: string, range: strin
 
 function parseMetrics(data: string[][]): SheetMetrics {
   const metrics: SheetMetrics = { sent: 0, opened: 0, replied: 0, bounced: 0, failed: 0, optOut: 0 };
-  if (data.length === 0) return metrics;
+  if (data.length <= 1) return metrics;
+
+  const headers = (data[0] || []).map(h => String(h || "").toLowerCase().trim());
+  const find = (names: string[]) => headers.findIndex(h => names.some(n => h === n || h.includes(n)));
+
+  const statusIdx = find(["status"]);
+  const repliedIdx = find(["replied"]);
+  const tagOpenIdx = find(["tag_open"]);
+  const openAtIdx = find(["open_first_at"]);
+  const optOutAtIdx = find(["opt_out_at"]);
 
   for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row) continue;
-    for (const cell of row) {
-      if (!cell) continue;
-      const cellLower = cell.toLowerCase().trim();
-      if (cellLower === "sent" || cellLower === "enviado") metrics.sent++;
-      else if (cellLower === "opened" || cellLower === "aberto") metrics.opened++;
-      else if (cellLower === "replied" || cellLower === "respondido") metrics.replied++;
-      else if (cellLower === "bounced" || cellLower === "devolvido") metrics.bounced++;
-      else if (cellLower === "failed" || cellLower === "erro" || cellLower === "error") metrics.failed++;
-      else if (cellLower === "optout" || cellLower === "opt-out" || cellLower === "unsubscribed") metrics.optOut++;
-    }
-  }
+    const row = data[i] || [];
+    const status = statusIdx >= 0 ? String(row[statusIdx] || "").trim().toUpperCase() : "";
 
-  if (metrics.sent === 0 && data.length > 1) {
-    metrics.sent = data.length - 1;
+    if (status === "SENT") metrics.sent++;
+    else if (status === "BOUNCED") metrics.bounced++;
+    else if (status === "ERROR" || status === "FAILED") metrics.failed++;
+    else if (status === "OPT_OUT" || status === "OPTOUT" || status === "UNSUBSCRIBED") metrics.optOut++;
+
+    const repliedVal = repliedIdx >= 0 ? String(row[repliedIdx] || "").trim().toUpperCase() : "";
+    if (["YES", "TRUE", "1"].includes(repliedVal)) metrics.replied++;
+
+    const tagOpenVal = tagOpenIdx >= 0 ? String(row[tagOpenIdx] || "").trim().toUpperCase() : "";
+    const openAtVal = openAtIdx >= 0 ? String(row[openAtIdx] || "").trim() : "";
+    if (["YES", "TRUE", "1"].includes(tagOpenVal) || openAtVal) metrics.opened++;
+
+    const optOutAtVal = optOutAtIdx >= 0 ? String(row[optOutAtIdx] || "").trim() : "";
+    if (optOutAtVal) metrics.optOut++;
   }
 
   return metrics;
